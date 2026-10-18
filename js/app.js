@@ -66,6 +66,7 @@
   }
 
   function render() {
+    if (document.getElementById("selSource")?.value === "hacienda") return;
     const { needs, max, min } = fillControls();
     if (!state.accumulate) state.from = state.to;
     const tree = treeFor();

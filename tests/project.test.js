@@ -97,7 +97,7 @@ test("la página referencia recursos existentes y carga los scripts en orden", (
   }
   assert.deepEqual(
     resources.filter(resource => resource.startsWith("js/")),
-    ["js/data.js", "js/trees.js", "js/treemap.js", "js/app.js"]
+    ["js/data.js", "js/trees.js", "js/treemap.js", "js/app.js", "js/data_hacienda.js", "js/hacienda.js"]
   );
 });
 
@@ -200,4 +200,102 @@ test("la aplicación renderiza las vistas, sectores y navegación sin errores", 
   assert.ok(rootCrumb);
   rootCrumb.onclick();
   assert.equal(get("crumbs").children.length, 1);
+});
+
+function loadBothSources() {
+  const elements = new Map();
+  const getElementById = id => {
+    if (!elements.has(id)) elements.set(id, new FakeElement(id));
+    return elements.get(id);
+  };
+  const context = loadDataAndTrees();
+  loadScripts(["js/data_hacienda.js"], context);
+  // Fixture sint?tico de dos a?os para probar acumulaci?n sin inventar datos de producci?n.
+  context.window.HACIENDA.data["00"]["2023"] = JSON.parse(JSON.stringify(context.window.HACIENDA.data["00"]["2024"]));
+  loadScripts(["js/treemap.js"], context);
+  context.squarify = context.window.squarify;
+  context.document = { getElementById, createElement: tag => new FakeElement(tag) };
+  const listeners = {};
+  context.addEventListener = (type, listener) => (listeners[type] ||= []).push(listener);
+  context.dispatchEvent = event => (listeners[event.type] || []).forEach(listener => listener(event));
+  context.Event = function Event(type) { this.type = type; };
+  context.innerWidth = 1200;
+  getElementById("selSource").value = "eurostat";
+  loadScripts(["js/app.js", "js/hacienda.js"], context);
+  return { context, get: getElementById, listeners };
+}
+
+test("Hacienda declara solo a\u00f1os y territorios con descarga real, con datos est\u00e1ticos finitos", () => {
+  const context = loadDataAndTrees();
+  loadScripts(["js/data_hacienda.js"], context);
+  const hacienda = context.window.HACIENDA;
+  assert.equal(Object.keys(hacienda.territories).length, 20);
+  assert.equal(hacienda.territories["00"], "Total CCAA");
+  assert.equal(hacienda.territories["17"], "Comunitat Valenciana");
+  assert.equal(hacienda.territories["18"], "Ceuta");
+  assert.equal(hacienda.territories["19"], "Melilla");
+  assert.equal(hacienda.classification, "Clasificaci\u00f3n funcional y cap\u00edtulos econ\u00f3micos propios de Hacienda");
+  assert.deepEqual(Object.keys(hacienda.data).sort(), ["00", ...Array.from({ length: 17 }, (_, i) => String(i + 1).padStart(2, "0"))].sort());
+  for (const [territory, byYear] of Object.entries(hacienda.data)) {
+    assert.deepEqual(Object.keys(byYear), ["2024"]);
+    const record = byYear["2024"];
+    assert.ok(record.rows.length > 0, `Sin filas para ${territory}`);
+    assert.ok(Number.isFinite(record.total) && record.total > 0);
+    assert.equal(record.totalChapters.length, 9);
+    for (const row of record.rows) {
+      assert.ok(Number.isFinite(row.total));
+      assert.equal(row.chapters.length, 9);
+      assert.ok(row.chapters.every(Number.isFinite));
+    }
+  }
+  assert.equal(hacienda.data["18"], undefined, "Ceuta no debe inventarse cuando no hay XLSX");
+  assert.equal(hacienda.data["19"], undefined, "Melilla no debe inventarse cuando no hay XLSX");
+  assert.equal(hacienda.years["2024"].length, 18);
+});
+
+test("el selector cambia a Hacienda por territorio y vuelve al flujo Eurostat intacto", () => {
+  const { context, get, listeners } = loadBothSources();
+  const eurostatData = context.DATA;
+  const eurostatTrees = context.TREES;
+  assert.equal(get("selSource").value, "eurostat");
+  assert.equal(get("euControls").hidden, false);
+  const eurostatCells = get("map").children.length;
+  assert.ok(eurostatCells > 0);
+
+  const source = get("selSource");
+  source.value = "hacienda"; source.onchange({ target: source });
+  assert.equal(get("euControls").hidden, true);
+  assert.equal(get("hcControls").hidden, false);
+  assert.equal(get("selHaciendaYear").value, "2024");
+  assert.ok(get("selHaciendaTerritory").options.some(o => o.value === "00"));
+  assert.ok(!get("selHaciendaTerritory").options.some(o => o.value === "18"));
+  assert.ok(get("map").children.length > 0);
+  assert.match(get("sum").innerHTML, /283\.709\.850/);
+  assert.match(get("note").textContent, /no equivalen a COFOG ni los cap\u00edtulos a tipos SEC/);
+  listeners.resize.forEach(listener => listener({ type: "resize" }));
+  assert.match(get("sum").innerHTML, /283\.709\.850/, "un resize no debe volver a pintar Eurostat sobre Hacienda");
+  const accumulate = get("chkHaciendaAcc");
+  accumulate.checked = true; accumulate.onchange({ target: accumulate });
+  const from = get("selHaciendaFrom"); from.value = "2023"; from.onchange({ target: from });
+  assert.match(get("sum").innerHTML, /2023.*2024 \(acumulado\)/);
+  accumulate.checked = false; accumulate.onchange({ target: accumulate });
+  assert.match(get("sum").innerHTML, /2024/);
+  assert.doesNotMatch(get("sum").innerHTML, /acumulado/);
+
+  const territory = get("selHaciendaTerritory");
+  territory.value = "09"; territory.onchange({ target: territory });
+  assert.match(get("sum").innerHTML, /55\.827\.555/);
+  const view = get("selHaciendaView");
+  view.value = "funcionTipo"; view.onchange({ target: view });
+  const drill = get("map").children.find(cell => cell.onclick);
+  assert.ok(drill, "La vista funcional por capitulo debe permitir navegar");
+  drill.onclick();
+  assert.ok(get("crumbs").children.length > 1);
+
+  source.value = "eurostat"; source.onchange({ target: source });
+  assert.equal(get("hcControls").hidden, true);
+  assert.equal(get("euControls").hidden, false);
+  assert.equal(context.DATA, eurostatData, "No se debe reemplazar ni mutar DATA de Eurostat");
+  assert.equal(context.TREES, eurostatTrees, "No se deben alterar los ?rboles de Eurostat");
+  assert.ok(get("map").children.length > 0);
 });

@@ -3,6 +3,7 @@
 body { margin: 0; font-family: system-ui, "Segoe UI", sans-serif; background: var(--bg); color: var(--txt); }
 header { padding: 14px 24px 6px; }
 h1 { font-size: 1.25rem; margin: 0 0 10px; }
+.source-switch { display: inline-flex; gap: 8px; align-items: center; color: var(--mut); font-size: .88rem; margin-bottom: 8px; }
 .controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
 .controls label { font-size: .85rem; color: var(--mut); display: flex; gap: 6px; align-items: center; }
 select, button { background: var(--panel); color: var(--txt); border: 1px solid #334155; padding: 7px 12px; font-size: .9rem; }
@@ -26,3 +27,7 @@ select:disabled { opacity: .45; }
 .empty { padding: 24px; color: var(--mut); }
 #tip { position: fixed; pointer-events: none; background: #000d; padding: 8px 12px; border-radius: 6px; font-size: .85rem; display: none; z-index: 9; max-width: 260px; }
 footer { padding: 10px 24px 16px; color: var(--mut); font-size: .78rem; }
+
+[hidden] { display: none !important; }
+#hcControls { padding-top: 4px; }
+.method-note { color: #fbbf24 !important; line-height: 1.5; padding-top: 5px !important; }

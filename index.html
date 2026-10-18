@@ -9,7 +9,8 @@
 <body>
 <header>
   <h1>🇪🇸 Ingresos y gastos de las Administraciones Públicas de España</h1>
-  <div class="controls">
+  <label class="source-switch">Fuente de datos <select id="selSource"><option value="eurostat">Eurostat — Contabilidad Nacional</option><option value="hacienda">Hacienda — liquidación presupuestaria CCAA</option></select></label>
+  <div class="controls" id="euControls">
     <div class="tabs">
       <button id="bIng" class="on">Ingresos</button><button id="bGas">Gastos</button>
     </div>
@@ -20,15 +21,23 @@
       <select id="selFrom" disabled></select>
     </label>
   </div>
+  <div class="controls" id="hcControls" hidden>
+    <label>Territorio <select id="selHaciendaTerritory"></select></label>
+    <label>Desglose <select id="selHaciendaView"></select></label>
+    <label>Año <select id="selHaciendaYear"></select></label>
+    <label><input type="checkbox" id="chkHaciendaAcc"> Acumular desde <select id="selHaciendaFrom" disabled></select></label>
+  </div>
 </header>
 <div class="bar"><div id="crumbs"></div><div id="sum"></div></div>
 <div id="note"></div>
 <div id="map"></div>
 <div id="tip"></div>
-<footer>Fuente: Eurostat (gov_10a_main, gov_10a_exp y gov_10a_taxag; S.13 Administraciones Públicas y subsectores S.1311 Estado, S.1312 CCAA, S.1313 entes locales y S.1314 Seguridad Social), basada en la Contabilidad Nacional de la IGAE. Millones de euros corrientes, base devengo (SEC 2010), consolidado (los subsectores no). Desgloses por función, por tipo e impuestos: 2015–2024; resumen por tipo: 2015–2025. Datos actualizables con <code>python scripts/fetch_data.py</code>.</footer>
+<footer id="sourceFooter">Fuente: Eurostat (gov_10a_main, gov_10a_exp y gov_10a_taxag; S.13 Administraciones Públicas y subsectores S.1311 Estado, S.1312 CCAA, S.1313 entes locales y S.1314 Seguridad Social), basada en la Contabilidad Nacional de la IGAE. Millones de euros corrientes, base devengo (SEC 2010), consolidado (los subsectores no). Desgloses por función, por tipo e impuestos: 2015–2024; resumen por tipo: 2015–2025. Datos actualizables con <code>python scripts/fetch_data.py</code>.</footer>
 <script src="js/data.js"></script>
 <script src="js/trees.js"></script>
 <script src="js/treemap.js"></script>
 <script src="js/app.js"></script>
+<script src="js/data_hacienda.js"></script>
+<script src="js/hacienda.js"></script>
 </body>
 </html>
