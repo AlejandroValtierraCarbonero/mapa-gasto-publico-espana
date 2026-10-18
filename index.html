@@ -13,9 +13,8 @@
     <div class="tabs">
       <button id="bIng" class="on">Ingresos</button><button id="bGas">Gastos</button>
     </div>
-    <label>Desglosar gastos por
-      <select id="selView"><option value="tipo">Tipo</option><option value="funcion">Función (COFOG)</option></select>
-    </label>
+    <label>Administración <select id="selSector"></select></label>
+    <label>Desglose <select id="selView"></select></label>
     <label>Año <select id="selTo"></select></label>
     <label><input type="checkbox" id="chkAcc"> Acumular desde
       <select id="selFrom" disabled></select>
@@ -26,7 +25,7 @@
 <div id="note"></div>
 <div id="map"></div>
 <div id="tip"></div>
-<footer>Fuente: Eurostat (gov_10a_main y gov_10a_exp, sector S.13 Administraciones Públicas), basada en la Contabilidad Nacional de la IGAE. Millones de euros corrientes, base devengo (SEC 2010), consolidado. Datos actualizables con <code>python scripts/fetch_data.py</code>.</footer>
+<footer>Fuente: Eurostat (gov_10a_main, gov_10a_exp y gov_10a_taxag; S.13 Administraciones Públicas y subsectores S.1311 Estado, S.1312 CCAA, S.1313 entes locales y S.1314 Seguridad Social), basada en la Contabilidad Nacional de la IGAE. Millones de euros corrientes, base devengo (SEC 2010), consolidado (los subsectores no). Desgloses por función, por tipo e impuestos: 2015–2024; resumen por tipo: 2015–2025. Datos actualizables con <code>python scripts/fetch_data.py</code>.</footer>
 <script src="js/data.js"></script>
 <script src="js/trees.js"></script>
 <script src="js/treemap.js"></script>
