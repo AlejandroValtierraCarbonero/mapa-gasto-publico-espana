@@ -210,8 +210,6 @@ function loadBothSources() {
   };
   const context = loadDataAndTrees();
   loadScripts(["js/data_hacienda.js"], context);
-  // Fixture sint?tico de dos a?os para probar acumulaci?n sin inventar datos de producci?n.
-  context.window.HACIENDA.data["00"]["2023"] = JSON.parse(JSON.stringify(context.window.HACIENDA.data["00"]["2024"]));
   loadScripts(["js/treemap.js"], context);
   context.squarify = context.window.squarify;
   context.document = { getElementById, createElement: tag => new FakeElement(tag) };
@@ -225,7 +223,7 @@ function loadBothSources() {
   return { context, get: getElementById, listeners };
 }
 
-test("Hacienda declara solo a\u00f1os y territorios con descarga real, con datos est\u00e1ticos finitos", () => {
+test("Hacienda declara la cobertura 2015–2024 y territorios con descarga real", () => {
   const context = loadDataAndTrees();
   loadScripts(["js/data_hacienda.js"], context);
   const hacienda = context.window.HACIENDA;
@@ -236,21 +234,25 @@ test("Hacienda declara solo a\u00f1os y territorios con descarga real, con datos
   assert.equal(hacienda.territories["19"], "Melilla");
   assert.equal(hacienda.classification, "Clasificaci\u00f3n funcional y cap\u00edtulos econ\u00f3micos propios de Hacienda");
   assert.deepEqual(Object.keys(hacienda.data).sort(), ["00", ...Array.from({ length: 17 }, (_, i) => String(i + 1).padStart(2, "0"))].sort());
+  const expectedYears = Array.from({ length: 10 }, (_, i) => String(2015 + i));
+  assert.deepEqual(Object.keys(hacienda.years).sort(), expectedYears);
+  assert.deepEqual(Object.keys(hacienda.data["00"]).sort(), expectedYears);
   for (const [territory, byYear] of Object.entries(hacienda.data)) {
-    assert.deepEqual(Object.keys(byYear), ["2024"]);
-    const record = byYear["2024"];
-    assert.ok(record.rows.length > 0, `Sin filas para ${territory}`);
-    assert.ok(Number.isFinite(record.total) && record.total > 0);
-    assert.equal(record.totalChapters.length, 9);
-    for (const row of record.rows) {
-      assert.ok(Number.isFinite(row.total));
-      assert.equal(row.chapters.length, 9);
-      assert.ok(row.chapters.every(Number.isFinite));
+    for (const [year, record] of Object.entries(byYear)) {
+      assert.ok(hacienda.years[year].includes(territory), `${territory} no figura en ${year}`);
+      assert.ok(record.rows.length > 0, `Sin filas para ${territory}/${year}`);
+      assert.ok(Number.isFinite(record.total) && record.total > 0);
+      assert.equal(record.totalChapters.length, 9);
+      for (const row of record.rows) {
+        assert.ok(Number.isFinite(row.total));
+        assert.equal(row.chapters.length, 9);
+        assert.ok(row.chapters.every(Number.isFinite));
+      }
     }
   }
   assert.equal(hacienda.data["18"], undefined, "Ceuta no debe inventarse cuando no hay XLSX");
   assert.equal(hacienda.data["19"], undefined, "Melilla no debe inventarse cuando no hay XLSX");
-  assert.equal(hacienda.years["2024"].length, 18);
+  for (const year of expectedYears) assert.equal(hacienda.years[year].length, 18);
 });
 
 test("el selector cambia a Hacienda por territorio y vuelve al flujo Eurostat intacto", () => {

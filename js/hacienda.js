@@ -110,7 +110,7 @@
       crumbs.appendChild(el); if (i < all.length - 1) crumbs.append(" › "); });
     const total = state.accumulate && state.from !== state.to ? tree.value : record.total;
     $("sum").innerHTML = `<b>${state.from === state.to ? state.to : `${state.from}–${state.to} (acumulado)`}</b> · Gasto liquidado: ${fmt(total)}`;
-    $("note").textContent = `Fuente: Ministerio de Hacienda. Copia local disponible: 2024; clasificaci\u00f3n funcional y econ\u00f3mica propia de la liquidaci\u00f3n presupuestaria (obligaciones reconocidas), miles de euros. Per\u00edmetro consolidado de la administraci\u00f3n auton\u00f3mica y entes incluidos en su cuenta, no todo el gasto p\u00fablico territorializado. Eurostat publica estos desgloses en otros ejercicios, en millones de euros y con base devengo SEC 2010 para S.1312. Las\u00a0\u00e1reas/pol\u00edticas no equivalen a COFOG ni los cap\u00edtulos a tipos SEC; no admite comparaci\u00f3n directa. Cap\u00edtulos 8 y 9 son financieros.`;
+    $("note").textContent = `Fuente: Ministerio de Hacienda. Copia local disponible: 2015–2024; clasificaci\u00f3n funcional y econ\u00f3mica propia de la liquidaci\u00f3n presupuestaria (obligaciones reconocidas), miles de euros. Per\u00edmetro consolidado de la administraci\u00f3n auton\u00f3mica y entes incluidos en su cuenta, no todo el gasto p\u00fablico territorializado. Eurostat publica estos desgloses en otros ejercicios, en millones de euros y con base devengo SEC 2010 para S.1312. Las\u00a0\u00e1reas/pol\u00edticas no equivalen a COFOG ni los cap\u00edtulos a tipos SEC; no admite comparaci\u00f3n directa. Cap\u00edtulos 8 y 9 son financieros.`;
   }
   const EUROSTAT_FOOTER = $("sourceFooter").innerHTML;
   let wasHacienda = false;

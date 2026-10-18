@@ -170,7 +170,8 @@ def download(year, code):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--years", nargs="+", type=int, default=[2024], help="Ejercicios a consultar (2002–2024)")
+    ap.add_argument("--years", nargs="+", type=int, default=list(range(2015, 2025)),
+                    help="Ejercicios a consultar (2002–2024; por defecto, 2015–2024)")
     ap.add_argument("--territories", nargs="+", default=["00", *[f"{i:02d}" for i in range(1, 20)]], help="Códigos oficiales 00–19")
     args = ap.parse_args()
     if any(y not in YEARS for y in args.years) or any(c not in TERRITORIES for c in args.territories):
