@@ -1,0 +1,20 @@
+# Documentación técnica
+
+Diseño técnico para aplicar las recomendaciones de [UX](../ux/README.md) y [accesibilidad](../accesibilidad/README.md) en la web estática (HTML/CSS/JS, sin backend). Cada documento indica su **Origen** (qué recomendaciones implementa), cómo se aplica (ficheros, CSS/JS/HTML concretos) y sus **Relacionados**. Estado: *Implementado* = aplicado en el código y cubierto por `tests/project.test.js`; *Parcial* = aplicado en parte, con el motivo indicado en el propio TEC.
+
+| ID | Título | Estado | Documentos origen |
+|---|---|---|---|
+| [TEC-001](TEC-001-arquitectura-actual.md) | Arquitectura actual y límites técnicos | Implementado | [UX-002](../ux/UX-002-jerarquia-visual.md), [UX-008](../ux/UX-008-evolucion.md), [UX-009](../ux/UX-009-rendimiento.md), [A11Y-003](../accesibilidad/semantica-landmarks.md), [A11Y-005](../accesibilidad/lectores-pantalla-aria.md) |
+| [TEC-002](TEC-002-tokens-y-contraste.md) | Tokens CSS, color, leyenda y movimiento | Implementado | [UX-004](../ux/UX-004-color-legibilidad.md), [A11Y-001](../accesibilidad/contraste.md), [A11Y-006](../accesibilidad/movimiento.md) |
+| [TEC-003](TEC-003-estructura-semantica.md) | Estructura HTML semántica y landmarks | Implementado | [UX-002](../ux/UX-002-jerarquia-visual.md), [A11Y-003](../accesibilidad/semantica-landmarks.md), [A11Y-009](../accesibilidad/idioma.md) |
+| [TEC-004](TEC-004-controles-y-contexto.md) | Controles, grupos, microcopy y contexto de consulta | Implementado | [UX-002](../ux/UX-002-jerarquia-visual.md), [UX-006](../ux/UX-006-feedback-estados.md), [UX-007](../ux/UX-007-textos.md), [A11Y-008](../accesibilidad/formularios-controles.md) |
+| [TEC-005](TEC-005-teclado-y-navegacion.md) | Navegación jerárquica, teclado y foco | Implementado | [UX-001](../ux/UX-001-navegacion.md), [A11Y-002](../accesibilidad/teclado-foco.md), [A11Y-003](../accesibilidad/semantica-landmarks.md), [A11Y-005](../accesibilidad/lectores-pantalla-aria.md) |
+| [TEC-006](TEC-006-componente-treemap.md) | Componente treemap y alternativa de datos | Implementado | [UX-003](../ux/UX-003-treemap.md), [UX-004](../ux/UX-004-color-legibilidad.md), [A11Y-001](../accesibilidad/contraste.md), [A11Y-004](../accesibilidad/treemap-graficos.md), [A11Y-007](../accesibilidad/zoom-reflow.md) |
+| [TEC-007](TEC-007-aria-y-feedback.md) | ARIA, regiones vivas y contenido emergente | Implementado | [UX-003](../ux/UX-003-treemap.md), [UX-005](../ux/UX-005-responsive.md), [UX-006](../ux/UX-006-feedback-estados.md), [A11Y-005](../accesibilidad/lectores-pantalla-aria.md), [A11Y-008](../accesibilidad/formularios-controles.md), [A11Y-009](../accesibilidad/idioma.md), [A11Y-010](../accesibilidad/tooltips.md) |
+| [TEC-008](TEC-008-responsive-y-reflow.md) | Responsive, reflow y ampliación | Implementado | [UX-002](../ux/UX-002-jerarquia-visual.md), [UX-005](../ux/UX-005-responsive.md), [A11Y-007](../accesibilidad/zoom-reflow.md), [A11Y-008](../accesibilidad/formularios-controles.md) |
+| [TEC-009](TEC-009-evolucion-y-tablas.md) | Evolución temporal, SVG y tablas accesibles | Implementado | [UX-005](../ux/UX-005-responsive.md), [UX-007](../ux/UX-007-textos.md), [UX-008](../ux/UX-008-evolucion.md), [A11Y-003](../accesibilidad/semantica-landmarks.md), [A11Y-004](../accesibilidad/treemap-graficos.md), [A11Y-009](../accesibilidad/idioma.md) |
+| [TEC-010](TEC-010-rendimiento-estados.md) | Rendimiento, carga y estados de error | Parcial | [UX-003](../ux/UX-003-treemap.md), [UX-006](../ux/UX-006-feedback-estados.md), [UX-009](../ux/UX-009-rendimiento.md), [A11Y-005](../accesibilidad/lectores-pantalla-aria.md) |
+| [TEC-011](TEC-011-fases-implementacion.md) | Plan de implementación por fases | Parcial | Todos ([UX](../ux/README.md), [accesibilidad](../accesibilidad/README.md)) |
+| [TEC-012](TEC-012-estrategia-pruebas.md) | Estrategia de pruebas técnicas y accesibles | Parcial | Todos los criterios de aceptación UX y A11Y |
+
+Documento adicional: [Matriz de trazabilidad](trazabilidad.md) (recomendación → TEC).

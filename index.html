@@ -7,35 +7,88 @@
 <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
+<a class="skip-link" href="#contenido">Saltar al contenido</a>
+<p id="announcement" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></p>
 <header>
   <h1>🇪🇸 Ingresos y gastos de las Administraciones Públicas de España</h1>
-  <label class="source-switch">Fuente de datos <select id="selSource"><option value="eurostat">Eurostat — Contabilidad Nacional</option><option value="hacienda">Hacienda — liquidación presupuestaria CCAA</option></select></label>
-  <div class="controls" id="euControls">
-    <div class="tabs">
-      <button id="bIng" class="on">Ingresos</button><button id="bGas">Gastos</button>
+  <fieldset class="controls" id="srcGroup">
+    <legend>Fuente de datos</legend>
+    <label>Fuente <select id="selSource" aria-describedby="sourceHelp"><option value="eurostat">Eurostat — Contabilidad Nacional</option><option value="hacienda">Hacienda — liquidación presupuestaria CCAA</option></select></label>
+    <p id="sourceHelp" class="hint">Cada fuente usa su propia base y clasificación; no compare cifras entre fuentes directamente.</p>
+  </fieldset>
+  <fieldset class="controls" id="euControls">
+    <legend>Consulta Eurostat: vista y periodo</legend>
+    <div class="tabs" role="group" aria-label="Tipo de operación">
+      <button type="button" id="bIng" class="on" aria-pressed="true">Ingresos</button><button type="button" id="bGas" aria-pressed="false">Gastos</button>
     </div>
-    <label>Administración <select id="selSector"></select></label>
+    <label>Administración <select id="selSector" aria-describedby="sectorHelp"></select></label>
     <label>Desglose <select id="selView"></select></label>
-    <label>Año <select id="selTo"></select></label>
-    <label><input type="checkbox" id="chkAcc"> Acumular desde
-      <select id="selFrom" disabled></select>
+    <label>Año <select id="selTo" aria-describedby="yearHelp"></select></label>
+    <label><input type="checkbox" id="chkAcc" aria-describedby="accHelp"> Acumular desde
+      <select id="selFrom" disabled aria-describedby="yearHelp"></select>
     </label>
-  </div>
-  <div class="controls" id="hcControls" hidden>
-    <label>Territorio <select id="selHaciendaTerritory"></select></label>
+    <p id="sectorHelp" class="hint">Los subsectores (Estado, CCAA, entes locales, Seguridad Social) no están consolidados y no suman el total.</p>
+    <p id="accHelp" class="hint">Al acumular se habilita el año inicial y se suman los importes del periodo.</p>
+    <p id="yearHelp" class="hint"></p>
+  </fieldset>
+  <fieldset class="controls" id="hcControls" hidden>
+    <legend>Consulta Hacienda: territorio, vista y periodo</legend>
+    <label>Territorio <select id="selHaciendaTerritory" aria-describedby="territoryHelp"></select></label>
     <label>Desglose <select id="selHaciendaView"></select></label>
     <label>Año <select id="selHaciendaYear"></select></label>
-    <label><input type="checkbox" id="chkHaciendaAcc"> Acumular desde <select id="selHaciendaFrom" disabled></select></label>
-  </div>
+    <label><input type="checkbox" id="chkHaciendaAcc" aria-describedby="accHelp"> Acumular desde <select id="selHaciendaFrom" disabled></select></label>
+    <p id="territoryHelp" class="hint">«Total CCAA» es el perímetro consolidado de la liquidación autonómica; no es el gasto público total de España.</p>
+  </fieldset>
+  <fieldset class="controls evo-controls">
+    <legend>Opciones de visualización</legend>
+    <label><input type="checkbox" id="chkEvo"> Ver evolución entre años</label>
+    <label id="lblEvoMode" hidden>Medida <select id="selEvoMode"></select></label>
+    <label><input type="checkbox" id="chkDefl" aria-describedby="deflHelp"> Deflactar importes (euros constantes)</label>
+    <label id="lblDeflKey" hidden>Deflactor <select id="selDeflKey"></select></label>
+    <label id="lblDeflBase" hidden>Precios de <select id="selDeflBase"></select></label>
+    <p id="deflHelp" class="hint">Según la guía metodológica, el modo «Automático» aplica a cada partida su deflactor (IPC en prestaciones, coste laboral en personal, FBCF en inversión, consumo público en servicios y PIB en el resto). Los datos originales no se alteran. Metodología: docs/metodologia/deflactacion.md.</p>
+  </fieldset>
+  <details class="glossary">
+    <summary>Glosario de siglas</summary>
+    <p><abbr title="Sistema Europeo de Cuentas">SEC</abbr> 2010: marco de contabilidad nacional (base devengo). <abbr title="Classification of the Functions of Government" lang="en">COFOG</abbr>: clasificación de las funciones de las Administraciones Públicas. <abbr title="Comunidades Autónomas">CCAA</abbr>: comunidades autónomas. M€: millones de euros.</p>
+  </details>
 </header>
-<div class="bar"><div id="crumbs"></div><div id="sum"></div></div>
-<div id="note"></div>
-<div id="map"></div>
-<div id="tip"></div>
-<footer id="sourceFooter">Fuente: Eurostat (gov_10a_main, gov_10a_exp y gov_10a_taxag; S.13 Administraciones Públicas y subsectores S.1311 Estado, S.1312 CCAA, S.1313 entes locales y S.1314 Seguridad Social), basada en la Contabilidad Nacional de la IGAE. Millones de euros corrientes, base devengo (SEC 2010), consolidado (los subsectores no). Desgloses por función, por tipo e impuestos: 2015–2024; resumen por tipo: 2015–2025. Datos actualizables con <code>python scripts/fetch_data.py</code>.</footer>
+<main id="contenido" tabindex="-1">
+  <p id="status" role="status">Cargando datos…</p>
+  <noscript><p class="notice">Esta página necesita JavaScript para mostrar los datos.</p></noscript>
+  <div class="bar">
+    <nav id="crumbs" aria-label="Ruta de navegación"></nav>
+    <button type="button" id="btnBack" hidden>Volver al nivel anterior</button>
+    <section aria-label="Resumen de la selección"><div id="sum"></div></section>
+  </div>
+  <p id="sourceNotice" class="notice" hidden></p>
+  <div id="note"></div>
+  <details id="noteDetails" class="note-details" hidden>
+    <summary>Ver nota metodológica completa</summary>
+    <div id="noteFull"></div>
+  </details>
+  <section aria-labelledby="visual-title">
+    <h2 id="visual-title">Distribución</h2>
+    <p id="mapHelp" class="hint">El área de cada rectángulo es proporcional al importe positivo de la partida en el nivel actual; el porcentaje es la proporción sobre ese nivel. «Otros / no desglosado» es una diferencia de conciliación, no una categoría homogénea. Las partidas negativas no se dibujan y aparecen en la tabla.</p>
+    <p id="legend" class="legend"><span class="swatch" aria-hidden="true"></span> Leyenda: el color distingue categorías principales; no expresa magnitud ni es comparable entre fuentes. El gris corresponde a «Otros / no desglosado».</p>
+    <h3 id="levelTitle" tabindex="-1"></h3>
+    <div id="map" aria-hidden="true"></div>
+    <div id="detail" class="detail" hidden></div>
+    <div id="altWrap">
+      <h3>Datos del nivel actual (tabla equivalente)</h3>
+      <div id="dataAlt" class="table-scroll"></div>
+    </div>
+  </section>
+</main>
+<div id="tip" aria-hidden="true"></div>
+<footer id="sourceFooter">Fuente: Eurostat (gov_10a_main, gov_10a_exp y gov_10a_taxag; S.13 Administraciones Públicas y subsectores S.1311 Estado, S.1312 CCAA, S.1313 entes locales y S.1314 Seguridad Social), basada en la Contabilidad Nacional de la IGAE. Millones de euros corrientes, base devengo (<abbr title="Sistema Europeo de Cuentas">SEC</abbr> 2010), consolidado (los subsectores no). Desgloses por función, por tipo e impuestos: 2000–2024; resumen por tipo: 2000–2025. Datos actualizables con <code>python scripts/fetch_data.py</code>.</footer>
 <script src="js/data.js"></script>
+<script src="js/data_deflactores.js"></script>
 <script src="js/trees.js"></script>
+<script src="js/deflactor.js"></script>
 <script src="js/treemap.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/evolucion.js"></script>
 <script src="js/app.js"></script>
 <script src="js/data_hacienda.js"></script>
 <script src="js/hacienda.js"></script>

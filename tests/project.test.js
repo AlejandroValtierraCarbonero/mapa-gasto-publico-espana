@@ -1,4 +1,4 @@
-const assert = require("node:assert/strict");
+﻿const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
@@ -14,10 +14,11 @@ function loadScripts(files, context = {}) {
 }
 
 function loadDataAndTrees() {
-  const context = loadScripts(["js/data.js", "js/trees.js"], { window: {} });
+  const context = loadScripts(["js/data.js", "js/data_deflactores.js", "js/trees.js", "js/deflactor.js"], { window: {} });
   context.DATA = context.window.DATA;
   context.TREES = context.window.TREES;
   context.SUBSECTORES = context.window.SUBSECTORES;
+  context.Deflactor = context.window.Deflactor;
   return context;
 }
 
@@ -27,13 +28,30 @@ class FakeElement {
     this.children = [];
     this.options = [];
     this.style = {};
-    this.classList = { add() {}, toggle() {} };
+    this.attributes = {};
+    this.classNames = new Set();
+    this.classList = {
+      add: name => this.classNames.add(name),
+      remove: name => this.classNames.delete(name),
+      toggle: (name, force) => (force === undefined ? !this.classNames.has(name) : force) ? this.classNames.add(name) : this.classNames.delete(name)
+    };
     this.clientWidth = 1000;
     this.clientHeight = 600;
     this.disabled = false;
+    this.hidden = false;
     this.checked = false;
     this._value = "";
-    this.textContent = "";
+    this._text = "";
+    this.focused = false;
+  }
+
+  set textContent(value) {
+    this._text = String(value);
+    this.children = [];
+  }
+
+  get textContent() {
+    return this._text + this.children.map(child => typeof child === "string" ? child : child.textContent).join("");
   }
 
   set value(value) {
@@ -46,6 +64,7 @@ class FakeElement {
 
   set innerHTML(html) {
     this._innerHTML = html;
+    this._text = "";
     this.children = [];
     this.options = [...html.matchAll(/<option value="([^"]+)"([^>]*)>(.*?)<\/option>/g)]
       .map(([, value, attributes, label]) => ({
@@ -59,14 +78,57 @@ class FakeElement {
     return this._innerHTML || "";
   }
 
-  append(child) {
-    this.children.push(child);
+  setAttribute(name, value) {
+    this.attributes[name] = String(value);
+  }
+
+  getAttribute(name) {
+    return name in this.attributes ? this.attributes[name] : null;
+  }
+
+  removeAttribute(name) {
+    delete this.attributes[name];
+  }
+
+  focus() {
+    this.focused = true;
+  }
+
+  append(...children) {
+    this.children.push(...children);
   }
 
   appendChild(child) {
     this.children.push(child);
     return child;
   }
+
+  find(predicate, found = []) {
+    for (const child of this.children) {
+      if (typeof child === "string") continue;
+      if (predicate(child)) found.push(child);
+      child.find(predicate, found);
+    }
+    return found;
+  }
+}
+
+function makeDocument(getElementById) {
+  const listeners = {};
+  return {
+    getElementById,
+    createElement: tag => Object.assign(new FakeElement(tag), { tag }),
+    addEventListener: (type, listener) => (listeners[type] ||= []).push(listener),
+    listeners
+  };
+}
+
+function crumbParts(nav) {
+  return nav.find(node => node.tag === "li");
+}
+
+function crumbButtons(nav) {
+  return nav.find(node => node.tag === "button");
 }
 
 function loadApp() {
@@ -76,35 +138,33 @@ function loadApp() {
     return elements.get(id);
   };
   const context = loadDataAndTrees();
-  loadScripts(["js/treemap.js"], context);
+  loadScripts(["js/treemap.js", "js/evolucion.js"], context);
+  context.Evolucion = context.window.Evolucion;
   context.squarify = context.window.squarify;
-  context.document = {
-    getElementById,
-    createElement: tag => new FakeElement(tag)
-  };
+  context.document = makeDocument(getElementById);
   context.addEventListener = () => {};
   context.innerWidth = 1200;
-  loadScripts(["js/app.js"], context);
+  loadScripts(["js/ui.js", "js/app.js"], context);
   return { context, get: getElementById };
 }
 
 test("la página referencia recursos existentes y carga los scripts en orden", () => {
   const html = read("index.html");
-  const resources = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(([, value]) => value);
+  const resources = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(([, value]) => value).filter(value => !value.startsWith("#"));
 
   for (const resource of resources) {
     assert.ok(fs.existsSync(path.join(root, resource)), `No existe ${resource}`);
   }
   assert.deepEqual(
     resources.filter(resource => resource.startsWith("js/")),
-    ["js/data.js", "js/trees.js", "js/treemap.js", "js/app.js", "js/data_hacienda.js", "js/hacienda.js"]
+    ["js/data.js", "js/data_deflactores.js", "js/trees.js", "js/deflactor.js", "js/treemap.js", "js/ui.js", "js/evolucion.js", "js/app.js", "js/data_hacienda.js", "js/hacienda.js"]
   );
 });
 
 test("los datos cubren los años, sectores y fuentes esperados con valores finitos", () => {
   const { DATA, TREES, SUBSECTORES } = loadDataAndTrees();
   assert.deepEqual(Object.keys(DATA).sort(), [
-    "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023", "2024", "2025"
+    ...Array.from({ length: 26 }, (_, i) => String(2000 + i))
   ]);
   assert.deepEqual(Object.keys(SUBSECTORES).sort(), ["S1311", "S1312", "S1313", "S1314"]);
   assert.deepEqual(Object.keys(TREES).sort(), [
@@ -192,14 +252,17 @@ test("la aplicación renderiza las vistas, sectores y navegación sin errores", 
   get("selTo").onchange({ target: get("selTo") });
   assert.match(get("sum").innerHTML, /2020–2022 \(acumulado\)/);
 
-  const drillCell = map.children.find(cell => cell.onclick);
+  const drillCell = map.children.find(cell => /drill/.test(cell.className));
   assert.ok(drillCell, "No hay ninguna categoría navegable");
   drillCell.onclick();
-  assert.ok(get("crumbs").children.length > 1);
-  const rootCrumb = get("crumbs").children.find(child => child && child.onclick);
+  assert.equal(crumbParts(get("crumbs")).length > 1, true);
+  assert.equal(get("btnBack").hidden, false);
+  assert.ok(get("levelTitle").focused, "El foco debe pasar al encabezado del nivel");
+  const rootCrumb = crumbButtons(get("crumbs")).find(child => child.onclick);
   assert.ok(rootCrumb);
   rootCrumb.onclick();
-  assert.equal(get("crumbs").children.length, 1);
+  assert.equal(crumbParts(get("crumbs")).length, 1);
+  assert.equal(get("btnBack").hidden, true);
 });
 
 function loadBothSources() {
@@ -210,20 +273,21 @@ function loadBothSources() {
   };
   const context = loadDataAndTrees();
   loadScripts(["js/data_hacienda.js"], context);
-  loadScripts(["js/treemap.js"], context);
+  loadScripts(["js/treemap.js", "js/evolucion.js"], context);
+  context.Evolucion = context.window.Evolucion;
   context.squarify = context.window.squarify;
-  context.document = { getElementById, createElement: tag => new FakeElement(tag) };
+  context.document = makeDocument(getElementById);
   const listeners = {};
   context.addEventListener = (type, listener) => (listeners[type] ||= []).push(listener);
   context.dispatchEvent = event => (listeners[event.type] || []).forEach(listener => listener(event));
   context.Event = function Event(type) { this.type = type; };
   context.innerWidth = 1200;
   getElementById("selSource").value = "eurostat";
-  loadScripts(["js/app.js", "js/hacienda.js"], context);
+  loadScripts(["js/ui.js", "js/app.js", "js/hacienda.js"], context);
   return { context, get: getElementById, listeners };
 }
 
-test("Hacienda declara la cobertura 2015–2024 y territorios con descarga real", () => {
+test("Hacienda declara la cobertura 2002–2024 y territorios con descarga real", () => {
   const context = loadDataAndTrees();
   loadScripts(["js/data_hacienda.js"], context);
   const hacienda = context.window.HACIENDA;
@@ -233,8 +297,8 @@ test("Hacienda declara la cobertura 2015–2024 y territorios con descarga real"
   assert.equal(hacienda.territories["18"], "Ceuta");
   assert.equal(hacienda.territories["19"], "Melilla");
   assert.equal(hacienda.classification, "Clasificaci\u00f3n funcional y cap\u00edtulos econ\u00f3micos propios de Hacienda");
-  assert.deepEqual(Object.keys(hacienda.data).sort(), ["00", ...Array.from({ length: 17 }, (_, i) => String(i + 1).padStart(2, "0"))].sort());
-  const expectedYears = Array.from({ length: 10 }, (_, i) => String(2015 + i));
+  assert.deepEqual(Object.keys(hacienda.data).sort(), ["00", ...Array.from({ length: 19 }, (_, i) => String(i + 1).padStart(2, "0"))].sort());
+  const expectedYears = Array.from({ length: 23 }, (_, i) => String(2002 + i));
   assert.deepEqual(Object.keys(hacienda.years).sort(), expectedYears);
   assert.deepEqual(Object.keys(hacienda.data["00"]).sort(), expectedYears);
   for (const [territory, byYear] of Object.entries(hacienda.data)) {
@@ -250,9 +314,11 @@ test("Hacienda declara la cobertura 2015–2024 y territorios con descarga real"
       }
     }
   }
-  assert.equal(hacienda.data["18"], undefined, "Ceuta no debe inventarse cuando no hay XLSX");
-  assert.equal(hacienda.data["19"], undefined, "Melilla no debe inventarse cuando no hay XLSX");
-  for (const year of expectedYears) assert.equal(hacienda.years[year].length, 18);
+  for (const code of ["18", "19"]) {
+    assert.deepEqual(Object.keys(hacienda.data[code]).sort(), Array.from({ length: 8 }, (_, i) => String(2005 + i)),
+      "Ceuta y Melilla solo tienen fichero de 2005 a 2012");
+  }
+  for (const year of expectedYears) assert.equal(hacienda.years[year].length, year >= "2005" && year <= "2012" ? 20 : 18);
 });
 
 test("el selector cambia a Hacienda por territorio y vuelve al flujo Eurostat intacto", () => {
@@ -270,10 +336,13 @@ test("el selector cambia a Hacienda por territorio y vuelve al flujo Eurostat in
   assert.equal(get("hcControls").hidden, false);
   assert.equal(get("selHaciendaYear").value, "2024");
   assert.ok(get("selHaciendaTerritory").options.some(o => o.value === "00"));
-  assert.ok(!get("selHaciendaTerritory").options.some(o => o.value === "18"));
+  assert.ok(get("selHaciendaTerritory").options.some(o => o.value === "18"));
   assert.ok(get("map").children.length > 0);
   assert.match(get("sum").innerHTML, /283\.709\.850/);
-  assert.match(get("note").textContent, /no equivalen a COFOG ni los cap\u00edtulos a tipos SEC/);
+  assert.match(get("noteFull").textContent, /no equivalen a COFOG ni los cap\u00edtulos a tipos SEC/);
+  assert.match(get("note").textContent, /no equivalen a COFOG ni a tipos SEC/);
+  assert.equal(get("noteDetails").hidden, false);
+  assert.match(get("sourceNotice").textContent, /Fuente cambiada a Hacienda/);
   listeners.resize.forEach(listener => listener({ type: "resize" }));
   assert.match(get("sum").innerHTML, /283\.709\.850/, "un resize no debe volver a pintar Eurostat sobre Hacienda");
   const accumulate = get("chkHaciendaAcc");
@@ -289,10 +358,10 @@ test("el selector cambia a Hacienda por territorio y vuelve al flujo Eurostat in
   assert.match(get("sum").innerHTML, /55\.827\.555/);
   const view = get("selHaciendaView");
   view.value = "funcionTipo"; view.onchange({ target: view });
-  const drill = get("map").children.find(cell => cell.onclick);
+  const drill = get("map").children.find(cell => /drill/.test(cell.className));
   assert.ok(drill, "La vista funcional por capitulo debe permitir navegar");
   drill.onclick();
-  assert.ok(get("crumbs").children.length > 1);
+  assert.ok(crumbParts(get("crumbs")).length > 1);
 
   source.value = "eurostat"; source.onchange({ target: source });
   assert.equal(get("hcControls").hidden, true);
@@ -300,4 +369,181 @@ test("el selector cambia a Hacienda por territorio y vuelve al flujo Eurostat in
   assert.equal(context.DATA, eurostatData, "No se debe reemplazar ni mutar DATA de Eurostat");
   assert.equal(context.TREES, eurostatTrees, "No se deben alterar los ?rboles de Eurostat");
   assert.ok(get("map").children.length > 0);
+});
+
+test("la evolución entre años calcula variaciones unitarias y porcentuales", () => {
+  const { Evolucion } = loadScripts(["js/evolucion.js"], { window: {} }).window;
+  assert.deepEqual(Array.from(Evolucion.transform([100, 110, 99], "delta")), [null, 10, -11]);
+  assert.deepEqual(Array.from(Evolucion.transform([100, 110, 0, 5], "pct")), [null, 10, -100, null]);
+  assert.deepEqual(Array.from(Evolucion.transform([1, 2], "valor")), [1, 2]);
+});
+
+test("la vista de evolución se pinta en ambas fuentes", () => {
+  const { get } = loadBothSources();
+  const check = get("chkEvo"); check.checked = true; check.onchange({ target: check });
+  assert.match(get("map").innerHTML, /<svg/);
+  const mode = get("selEvoMode"); mode.value = "pct"; mode.onchange({ target: mode });
+  assert.match(get("map").innerHTML, /porcentual/);
+  const source = get("selSource"); source.value = "hacienda"; source.onchange({ target: source });
+  mode.value = "delta"; mode.onchange({ target: mode });
+  assert.match(get("map").innerHTML, /unitaria/);
+  assert.match(get("map").innerHTML, /2015/);
+});
+
+
+test("la estructura HTML ofrece landmarks, salto, migas nav, región viva y grupos de controles", () => {
+  const html = read("index.html");
+  assert.match(html, /<a class="skip-link" href="#contenido">/);
+  assert.match(html, /<main id="contenido" tabindex="-1">/);
+  assert.match(html, /<nav id="crumbs" aria-label="Ruta de navegación">/);
+  assert.match(html, /id="announcement"[^>]*aria-live="polite"/);
+  assert.match(html, /<h1>/);
+  assert.match(html, /<h2 id="visual-title">/);
+  assert.equal((html.match(/<fieldset/g) || []).length, 4);
+  assert.equal((html.match(/<legend>/g) || []).length, 4);
+  assert.match(html, /id="bIng"[^>]*aria-pressed="true"/);
+  assert.match(html, /id="legend"/);
+  assert.match(html, /<main[\s\S]*id="sum"[\s\S]*id="map"[\s\S]*<\/main>/);
+  const css = read("css/styles.css");
+  assert.match(css, /:focus-visible/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
+  assert.match(css, /\.skip-link:focus/);
+  assert.match(css, /@media \(max-width: 40rem\)/);
+});
+
+test("las celdas del treemap usan botones no interactivos por teclado, contraste ≥ 4,5:1 y tabla equivalente", () => {
+  const { get, context } = loadApp();
+  const cells = get("map").children;
+  assert.ok(cells.length > 0);
+  assert.equal(get("map").getAttribute("aria-hidden"), "true");
+  for (const cell of cells) {
+    assert.equal(cell.tag, "button");
+    assert.equal(cell.getAttribute("tabindex"), "-1");
+  }
+  const rows = get("dataAlt").find(node => node.tag === "tr");
+  assert.ok(rows.length >= cells.length + 1, "la tabla debe incluir al menos las partidas del mapa");
+  assert.ok(get("dataAlt").find(node => node.tag === "caption").length === 1);
+  assert.ok(get("dataAlt").find(node => node.tag === "th" && node.getAttribute("scope") === "row").length >= cells.length);
+  const { cellColors } = context.window.UI;
+  for (let hue = 0; hue < 360; hue += 5) {
+    for (const light of [28, 31, 36, 40, 46]) {
+      assert.ok(cellColors(hue, 60, light).ratio >= 4.5, `contraste insuficiente en hsl(${hue} 60% ${light}%)`);
+    }
+  }
+  assert.ok(cellColors(215, 12, 38).ratio >= 4.5);
+});
+
+test("los botones Ingresos/Gastos exponen aria-pressed y los cambios se anuncian una vez", () => {
+  const { get } = loadApp();
+  get("bGas").onclick();
+  assert.equal(get("bGas").getAttribute("aria-pressed"), "true");
+  assert.equal(get("bIng").getAttribute("aria-pressed"), "false");
+  assert.match(get("announcement").textContent, /^Gastos, \d{4}, .* M€, nivel Gastos/);
+  assert.match(get("sum").innerHTML, /Saldo \((déficit|superávit)\): [+-]?/);
+});
+
+test("la navegación por teclado: volver, migas y foco tras el render", () => {
+  const { get } = loadApp();
+  const drillBtn = get("dataAlt").find(node => node.tag === "button" && node.onclick)[0];
+  assert.ok(drillBtn, "la tabla debe ofrecer 'Abrir desglose' como camino por teclado");
+  drillBtn.onclick();
+  assert.equal(get("btnBack").hidden, false);
+  assert.equal(get("levelTitle").focused, true);
+  get("levelTitle").focused = false;
+  get("btnBack").onclick();
+  assert.equal(get("btnBack").hidden, true);
+  assert.equal(get("levelTitle").focused, true);
+  const current = get("crumbs").find(node => node.getAttribute("aria-current") === "page");
+  assert.equal(current.length, 1);
+});
+
+test("Hacienda: tabla, aviso de cambio de fuente y estado vacío sin romper controles", () => {
+  const { get } = loadBothSources();
+  const source = get("selSource");
+  source.value = "hacienda"; source.onchange({ target: source });
+  assert.match(get("announcement").textContent, /Fuente cambiada a Hacienda/);
+  assert.ok(get("dataAlt").find(node => node.tag === "tr").length > 1);
+  assert.match(get("dataAlt").find(node => node.tag === "caption")[0].textContent, /miles de euros/);
+  assert.match(get("sum").innerHTML, /miles de €/);
+  source.value = "eurostat"; source.onchange({ target: source });
+  assert.match(get("sourceNotice").textContent, /Fuente cambiada a Eurostat/);
+  assert.equal(get("noteDetails").hidden, true);
+});
+
+test("la evolución usa tabla semántica, SVG con título/descripción, límite de series y celdas no calculables", () => {
+  const { Evolucion } = loadScripts(["js/evolucion.js"], { window: {} }).window;
+  const el = { innerHTML: "" };
+  const years = [2000, 2001, 2002];
+  const series = Array.from({ length: 12 }, (_, i) => ({ name: `Partida ${i}`, values: [100 + i, 0, i === 0 ? null : 50] }));
+  const fmt = n => `${n} M€`;
+  Evolucion.draw(el, { years, series, mode: "pct", fmt, unit: "M€", context: "Eurostat, Gastos" });
+  assert.match(el.innerHTML, /<svg[^>]*role="img"[^>]*aria-labelledby="evoChartTitle"[^>]*aria-describedby="evoChartDesc"/);
+  assert.match(el.innerHTML, /<caption>[^<]*Eurostat, Gastos[^<]*2000–2002/);
+  assert.match(el.innerHTML, /<th scope="col">2001<\/th>/);
+  assert.match(el.innerHTML, /<th scope="row">/);
+  assert.match(el.innerHTML, /las 10 partidas mayores del último año; la tabla incluye las 12 series/);
+  assert.equal((el.innerHTML.match(/<path /g) || []).length, 10);
+  assert.equal((el.innerHTML.match(/<th scope="row">/g) || []).length, 12);
+  assert.match(el.innerHTML, /No calculable/);
+  assert.match(el.innerHTML, /No disponible/);
+  assert.doesNotMatch(el.innerHTML, /aria-label="Evolución"/);
+});
+
+test("el deflactor clasifica las partidas según la guía y reexpresa en euros constantes", () => {
+  const { Deflactor: D } = loadDataAndTrees();
+  assert.equal(D.classify(["Gastos", "Remuneración de asalariados"], "eurostat"), "laboral");
+  assert.equal(D.classify(["Gastos", "Prestaciones sociales"], "eurostat"), "ipc");
+  assert.equal(D.classify(["Gastos", "Inversión", "Formación bruta de capital fijo"], "eurostat"), "fbcf");
+  assert.equal(D.classify(["Gastos", "Sanidad"], "eurostat"), "consumo");
+  assert.equal(D.classify(["Gastos", "Protección social", "Vejez (pensiones)"], "eurostat"), "ipc");
+  assert.equal(D.classify(["Gastos"], "eurostat"), "pib");
+  assert.equal(D.classify(["Gasto por capítulo", "1. Gastos de personal"], "hacienda"), "laboral");
+  assert.equal(D.classify(["Gasto por área", "Educación"], "hacienda"), "consumo");
+  assert.equal(D.state.on, false);
+  assert.equal(D.factor("ipc", 2010), 1);
+  D.state.on = true; D.state.base = 2020;
+  assert.ok(Math.abs(D.factor("ipc", 2010) - D.index("ipc", 2020) / D.index("ipc", 2010)) < 1e-12);
+  assert.ok(D.factor("pib", 2000) > 1);
+  assert.equal(D.factor("pib", 2020), 1);
+});
+
+test("deflactar mantiene los datos nominales y el total coherente con sus partidas en ambas fuentes", () => {
+  const { get, context } = loadBothSources();
+  const nominal = get("sum").innerHTML;
+  get("selTo").value = "2010"; get("selTo").onchange({ target: get("selTo") });
+  const before = get("sum").innerHTML;
+  get("chkDefl").checked = true; get("chkDefl").onchange({ target: get("chkDefl") });
+  assert.match(get("sum").innerHTML, /€ constantes de 2024/);
+  assert.notEqual(get("sum").innerHTML, before);
+  assert.equal(get("lblDeflBase").hidden, false);
+  assert.match(get("note").textContent, /Importes deflactados a euros constantes de 2024/);
+  get("chkDefl").checked = false; get("chkDefl").onchange({ target: get("chkDefl") });
+  assert.equal(get("sum").innerHTML, before);
+  assert.notEqual(nominal, before);
+
+  const source = get("selSource");
+  source.value = "hacienda"; source.onchange({ target: source });
+  get("chkDefl").checked = true; get("chkDefl").onchange({ target: get("chkDefl") });
+  assert.match(get("sum").innerHTML, /€ constantes de 2024/);
+  get("chkHaciendaAcc").checked = true; get("chkHaciendaAcc").onchange({ target: get("chkHaciendaAcc") });
+  get("selHaciendaFrom").value = "2015"; get("selHaciendaFrom").onchange({ target: get("selHaciendaFrom") });
+  assert.match(get("sum").innerHTML, /2015–2024 \(acumulado\)/);
+  assert.ok(get("dataAlt").find(node => node.tag === "tr").length > 1);
+  assert.ok(context.Deflactor.state.on);
+});
+
+test("la evolución compara el gasto nominal con su deflactor en índice 100", () => {
+  const { Evolucion } = loadScripts(["js/evolucion.js"], { window: {} }).window;
+  const { Deflactor } = loadDataAndTrees();
+  const el = { innerHTML: "" };
+  const years = [2015, 2016, 2017];
+  const nominal = [100, 110, 121];
+  const series = [{ name: "Personal", defl: "laboral", values: nominal, nominal }];
+  const context = loadScripts(["js/evolucion.js"], { window: { Deflactor } });
+  context.window.Evolucion.draw(el, { years, series, mode: "indice", fmt: n => String(n), unit: "M€" });
+  assert.match(el.innerHTML, /Personal · nominal/);
+  assert.match(el.innerHTML, /Personal · deflactor \(Coste laboral/);
+  assert.match(el.innerHTML, /Personal · real/);
+  assert.match(el.innerHTML, /stroke-dasharray/);
+  assert.match(el.innerHTML, /<td class="">121,0<\/td>/);
 });

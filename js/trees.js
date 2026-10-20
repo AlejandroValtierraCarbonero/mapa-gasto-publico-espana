@@ -148,6 +148,7 @@
   const root = (name, total, children, needs) => ({ name, codes: [total], children, needs, rest: "Otros / no desglosado" });
 
   window.SUBSECTORES = SUBSECTORES;
+  window.FUNCIONES_COFOG = Object.values(FUNCIONES);
   window.TREES = {
     ingresos: root("Ingresos", "TR", ingresos(false), "main"),
     ingresosDetalle: root("Ingresos", "TR", ingresos(true), "tax"),

@@ -1,5 +1,10 @@
 (function () {
   const $ = id => document.getElementById(id);
+  const UI = window.UI;
+  if (typeof DATA === "undefined" || typeof TREES === "undefined") {
+    UI.showError("No se pudieron cargar los datos de Eurostat.");
+    return;
+  }
   const fmt = n => Math.round(n).toLocaleString("es-ES") + " M€";
   const years = Object.keys(DATA).map(Number).sort((a, b) => a - b);
   const last = years[years.length - 1];
@@ -12,37 +17,52 @@
   const SECTORES = [["S13", "Total Administraciones Públicas"], ...Object.entries(SUBSECTORES)];
 
   const state = { side: "Ingresos", view: "resumen", sector: "S13", from: last, to: last, accumulate: false, path: [] };
+  let summary = "";
+  let lastWidth = -1;
+  const update = () => { render(); UI.announce(summary); };
 
   const treeFor = () => TREES[VIEWS[state.side].find(v => v[0] === state.view)[2]];
   const block = (y, src) => (DATA[y][state.sector] || {})[src];
 
-  // Suma un código (con posible signo "-") a lo largo del rango de años seleccionado
-  function value(codes, source) {
+  // Valor nominal de un código (con posible signo "-") en un año concreto
+  function nominal(codes, source, y) {
+    const d = block(y, source || "main") || {};
     let s = 0;
-    for (let y = state.from; y <= state.to; y++) {
-      const d = block(y, source || "main") || {};
-      for (const c of codes) s += c[0] === "-" ? -(d[c.slice(1)] || 0) : (d[c] || 0);
-    }
+    for (const c of codes) s += c[0] === "-" ? -(d[c.slice(1)] || 0) : (d[c] || 0);
     return s;
   }
-  const own = n => value(n.codes, n.source);
-  const valOf = n => n.codes ? own(n) : (n.children || []).reduce((s, c) => s + valOf(c), 0);
+  const nomOwn = (n, y) => nominal(n.codes, n.source, y);
+  const nomVal = (n, y) => n.codes ? nomOwn(n, y) : (n.children || []).reduce((s, c) => s + nomVal(c, y), 0);
+  // Valor del nodo en el año y, deflactado con el deflactor de cada partida; la diferencia con sus hijos se deflacta con el del propio nodo
+  function realVal(n, y) {
+    if (!Deflactor.state.on) return nomVal(n, y);
+    const f = Deflactor.factor(n.defl, y);
+    if (!n.children) return nomOwn(n, y) * f;
+    const sum = n.children.reduce((s, c) => s + realVal(c, y), 0);
+    return n.codes ? sum + (nomOwn(n, y) - n.children.reduce((s, c) => s + nomVal(c, y), 0)) * f : sum;
+  }
+  const valOf = n => { let s = 0; for (let y = state.from; y <= state.to; y++) s += realVal(n, y); return s; };
 
   // Hijos de un nodo con su valor; si el nodo tiene valor propio se añade la diferencia como «Otros / no desglosado»
   function kids(n) {
     if (!n.children) return [];
-    const list = n.children.map(c => ({ node: c, val: valOf(c) }));
+    const list = n.children.map(c => ({ node: c, val: valOf(c), defl: c.defl }));
     if (n.codes) {
-      const resid = own(n) - list.reduce((s, k) => s + k.val, 0);
-      if (Math.abs(resid) >= 0.5) list.push({ node: { name: n.rest || "Otros / no desglosado" }, val: resid, residual: true });
+      const resid = valOf(n) - list.reduce((s, k) => s + k.val, 0);
+      if (Math.abs(resid) >= 0.5) list.push({ node: { name: n.rest || "Otros / no desglosado" }, val: resid, residual: true, defl: n.defl });
     }
     return list;
   }
   const grandTotal = key => {
     let s = 0;
-    for (let y = state.from; y <= state.to; y++) s += (block(y, "main") || {})[key] || 0;
+    for (let y = state.from; y <= state.to; y++) s += ((block(y, "main") || {})[key] || 0) * Deflactor.factor("pib", y);
     return s;
   };
+  const annotate = (n, path) => {
+    n.defl = Deflactor.classify([...path, n.name], "eurostat");
+    (n.children || []).forEach(c => annotate(c, [...path, n.name]));
+  };
+  Object.values(TREES).forEach(t => annotate(t, []));
 
   function fillControls() {
     const views = VIEWS[state.side];
@@ -62,64 +82,99 @@
     $("selTo").value = state.to;
     $("selFrom").value = state.from;
     $("selFrom").disabled = !state.accumulate;
+    $("yearHelp").textContent = ok.length < years.length
+      ? `Los años deshabilitados no tienen datos para este desglose; disponible ${ok[0]}–${max}.` : "";
     return { needs, max, min: ok[0] };
+  }
+
+  // Evolución de los hijos del nodo actual en todos los años con datos para el desglose
+  function renderEvolution(map, needs) {
+    const saved = [state.from, state.to];
+    const ys = years.filter(y => !!block(y, needs));
+    const collect = () => ys.map(y => {
+      state.from = state.to = y;
+      let node = treeFor();
+      for (const p of state.path) node = kids(node).map(k => k.node).find(c => c.name === p) || node;
+      return new Map(kids(node).map(k => [k.node.name, k]));
+    });
+    const perYear = collect();
+    const wasOn = Deflactor.state.on;
+    Deflactor.state.on = false;
+    const nominalYear = wasOn ? collect() : perYear;
+    Deflactor.state.on = wasOn;
+    [state.from, state.to] = saved;
+    const latest = perYear[perYear.length - 1] || new Map();
+    const series = [...latest.entries()].filter(([, k]) => k.val > 0)
+      .map(([name, k]) => ({ name, residual: !!k.residual, defl: k.defl, values: perYear.map(m => m.has(name) ? m.get(name).val : null),
+        nominal: nominalYear.map(m => m.has(name) ? m.get(name).val : null) }))
+      .sort((a, b) => b.values[b.values.length - 1] - a.values[a.values.length - 1]);
+    const level = state.path.length ? state.path[state.path.length - 1] : (state.side === "Ingresos" ? "ingresos" : "gastos");
+    Evolucion.draw(map, { years: ys, series, mode: $("selEvoMode").value, fmt, unit: "M€" + Deflactor.suffix().replace(" · ", ", "),
+      context: `Eurostat, ${state.side}, ${level}, ${state.sector === "S13" ? "total Administraciones Públicas" : "subsector " + state.sector}` });
   }
 
   function render() {
     if (document.getElementById("selSource")?.value === "hacienda") return;
+    lastWidth = $("map").clientWidth;
     const { needs, max, min } = fillControls();
     if (!state.accumulate) state.from = state.to;
     const tree = treeFor();
     let node = tree;
     for (const p of state.path) node = kids(node).map(k => k.node).find(c => c.name === p) || node;
-    const map = $("map"), tip = $("tip");
+    const map = $("map");
+    const evo = $("chkEvo") && $("chkEvo").checked;
+    $("lblEvoMode").hidden = !evo;
+    window.syncDeflControls();
+    map.classList.toggle("evo-on", evo);
+    $("altWrap").hidden = !!evo;
+    UI.hideTip(); UI.hideDetail();
+    if (evo) renderEvolution(map, needs);
     const root = valOf(tree), cur = valOf(node);
     const items = kids(node);
     const topNames = tree.children.map(c => c.name);
-    const rects = squarify(items.map(i => ({ ...i, val: i.val })), 0, 0, map.clientWidth, map.clientHeight);
-    map.innerHTML = "";
-    rects.forEach((r, i) => {
-      const top = state.path.length ? topNames.indexOf(state.path[0]) : topNames.indexOf(r.node.name);
-      const hue = Math.round(top * 360 / topNames.length + (state.side === "Ingresos" ? 200 : 0)) % 360;
-      const light = state.path.length ? Math.max(28, 46 - i * 2.5) : 40;
-      const pct = (r.val / cur * 100).toFixed(1), pctRoot = (r.val / root * 100).toFixed(1);
-      const d = document.createElement("div");
-      d.className = "cell";
-      const bg = r.residual ? "hsl(215 12% 38%)" : `hsl(${hue} 60% ${light}%)`;
-      d.style.cssText = `left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;background:${bg}`;
-      d.innerHTML = `<b>${r.node.name}</b><small>${fmt(r.val)} · ${pct}%</small>`;
-      const drill = !r.residual && kids(r.node).filter(k => k.val > 0).length > 1;
-      if (drill) { d.classList.add("drill"); d.onclick = () => { state.path.push(r.node.name); render(); }; }
-      d.onmousemove = e => {
-        tip.style.display = "block";
-        tip.style.left = Math.min(e.clientX + 14, innerWidth - 280) + "px";
-        tip.style.top = e.clientY + 14 + "px";
-        tip.innerHTML = `<b>${r.node.name}</b><br>${fmt(r.val)}<br>${pct}% de ${node.name}<br>${pctRoot}% del total de ${state.side.toLowerCase()}` +
-          (drill ? "<br><i>Clic para ver el detalle</i>" : "");
-      };
-      d.onmouseleave = () => tip.style.display = "none";
-      map.appendChild(d);
-    });
-    if (!rects.length) map.innerHTML = '<p class="empty">Sin datos para esta selección.</p>';
+    const rects = evo ? [] : squarify(items.map(i => ({ ...i, val: i.val })), 0, 0, map.clientWidth, map.clientHeight);
+    const isDrill = k => !k.residual && kids(k.node).filter(x => x.val > 0).length > 1;
+    const open = name => () => { state.path.push(name); update(); UI.focusLevel(); };
+    const pctOf = v => cur ? (v / cur * 100).toFixed(1) : "0.0";
+    if (!evo) {
+      UI.renderMap(map, rects, {
+        color: (r, i) => {
+          const top = state.path.length ? topNames.indexOf(state.path[0]) : topNames.indexOf(r.node.name);
+          const hue = Math.round(top * 360 / topNames.length + (state.side === "Ingresos" ? 200 : 0)) % 360;
+          const light = state.path.length ? Math.max(28, 46 - i * 2.5) : 40;
+          return r.residual ? UI.cellColors(215, 12, 38) : UI.cellColors(hue, 60, light);
+        },
+        amount: fmt, share: r => pctOf(r.val) + "%", drill: r => isDrill(r),
+        open: r => open(r.node.name)(),
+        detail: (r, drill) => [fmt(r.val), `${pctOf(r.val)}% de ${state.path.length ? node.name : "este nivel"}`,
+          `${(root ? r.val / root * 100 : 0).toFixed(1)}% del total de ${state.side.toLowerCase()}`,
+          ...(drill ? ["Abra el desglose desde la tabla o con clic."] : [])]
+      });
+      map.setAttribute("aria-hidden", rects.length ? "true" : "false");
+      if (!rects.length) map.innerHTML = `<p class="empty">${UI.emptyMessage(items)}</p>`;
+      UI.renderTable($("dataAlt"), [...items].sort((a, b) => b.val - a.val).map(k => ({
+        name: k.node.name, amount: fmt(k.val), share: pctOf(k.val) + " %", kindLabel: UI.KINDS[UI.kindOf(k)],
+        drill: isDrill(k), open: open(k.node.name)
+      })), { caption: `${state.path.length ? node.name : state.side}, ${state.from === state.to ? state.to : state.from + "–" + state.to}, millones de euros${Deflactor.suffix()}`, unit: "millones de euros, M€" });
+    } else map.removeAttribute("aria-hidden");
 
-    const c = $("crumbs");
-    c.innerHTML = "";
-    [state.side, ...state.path].forEach((p, i, a) => {
-      const s = document.createElement("span");
-      s.textContent = p;
-      if (i < a.length - 1) { s.className = "link"; s.onclick = () => { state.path = state.path.slice(0, i); render(); }; }
-      c.appendChild(s);
-      if (i < a.length - 1) c.append(" › ");
-    });
+    const per = state.from === state.to ? state.to : `${state.from}–${state.to} (acumulado)`;
+    const crumbLabels = [state.side, ...state.path];
+    UI.crumbs($("crumbs"), crumbLabels, i => { state.path = state.path.slice(0, i); update(); UI.focusLevel(); });
+    UI.setBack(state.path.length > 0, () => { state.path.pop(); update(); UI.focusLevel(); });
+    $("levelTitle").textContent = `${crumbLabels[crumbLabels.length - 1]} · ${per}`;
+    summary = `${state.side}, ${per}, ${fmt(cur)}, nivel ${crumbLabels[crumbLabels.length - 1]}`;
 
     const ti = grandTotal("TR"), tg = grandTotal("TE"), b = ti - tg;
-    const per = state.from === state.to ? state.to : `${state.from}–${state.to} (acumulado)`;
-    $("sum").innerHTML = `<b>${per}</b> · Ingresos: ${fmt(ti)} · Gastos: ${fmt(tg)} · ` +
-      `<span class="${b < 0 ? "neg" : "pos"}">Saldo: ${fmt(b)}</span>`;
+    $("sum").innerHTML = `<b>${per}</b>${Deflactor.suffix()} · Ingresos: ${fmt(ti)} · Gastos: ${fmt(tg)} · ` +
+      `<span class="${b < 0 ? "neg" : "pos"}">Saldo (${b < 0 ? "déficit" : "superávit"}): ${b > 0 ? "+" : ""}${fmt(b)}</span>`;
+    $("noteDetails").hidden = true; $("noteFull").textContent = "";
+    UI.hideStatus();
 
     const notes = [];
     if (needs !== "main") notes.push(`Este desglose solo está publicado para ${min}–${max}.`);
     if (state.sector !== "S13") notes.push("Subsector no consolidado: incluye transferencias entre administraciones, por lo que los subsectores no suman el total.");
+    if (Deflactor.state.on) notes.push(`Importes deflactados a euros constantes de ${Deflactor.state.base} con: ${Deflactor.describe(items.map(k => k.defl))}. Totales de ingresos y gastos con el deflactor del PIB.`);
     const negs = items.filter(k => k.val < 0 && Math.abs(k.val) >= 0.5);
     if (negs.length) notes.push("Partidas negativas no representadas: " + negs.map(k => `${k.node.name} (${fmt(k.val)})`).join("; ") + ".");
     $("note").textContent = notes.join(" ");
@@ -129,15 +184,39 @@
     state.side = s; state.path = []; state.view = VIEWS[s][0][0];
     $("bIng").classList.toggle("on", s === "Ingresos");
     $("bGas").classList.toggle("on", s === "Gastos");
-    render();
+    $("bIng").setAttribute("aria-pressed", String(s === "Ingresos"));
+    $("bGas").setAttribute("aria-pressed", String(s === "Gastos"));
+    update();
   }
   $("bIng").onclick = () => setSide("Ingresos");
   $("bGas").onclick = () => setSide("Gastos");
-  $("selView").onchange = e => { state.view = e.target.value; state.path = []; render(); };
-  $("selSector").onchange = e => { state.sector = e.target.value; state.path = []; render(); };
-  $("selTo").onchange = e => { state.to = +e.target.value; if (state.from > state.to) state.from = state.to; render(); };
-  $("selFrom").onchange = e => { state.from = +e.target.value; if (state.from > state.to) state.to = state.from; render(); };
-  $("chkAcc").onchange = e => { state.accumulate = e.target.checked; render(); };
-  addEventListener("resize", render);
+  $("selView").onchange = e => { state.view = e.target.value; state.path = []; update(); };
+  $("selSector").onchange = e => { state.sector = e.target.value; state.path = []; update(); };
+  $("selTo").onchange = e => { state.to = +e.target.value; if (state.from > state.to) state.from = state.to; update(); };
+  $("selFrom").onchange = e => { state.from = +e.target.value; if (state.from > state.to) state.to = state.from; update(); };
+  $("chkAcc").onchange = e => { state.accumulate = e.target.checked; update(); };
+  $("selEvoMode").innerHTML = Evolucion.MODES.map(m => `<option value="${m[0]}">${m[1]}</option>`).join("");
+  const rerender = () => { update(); if ($("selSource").value === "hacienda" && window.renderHacienda) window.renderHacienda(true); };
+  $("selEvoMode").onchange = rerender;
+  const D = Deflactor;
+  $("selDeflKey").innerHTML = `<option value="auto">Automático según la partida (guía)</option>` + Object.entries(D.KEYS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+  $("selDeflBase").innerHTML = D.years().map(y => `<option value="${y}">${y}</option>`).join("");
+  $("selDeflBase").value = D.state.base;
+  window.syncDeflControls = () => {
+    const idx = $("chkEvo").checked && $("selEvoMode").value === "indice";
+    $("lblDeflKey").hidden = !($("chkDefl").checked || idx);
+    $("lblDeflBase").hidden = !$("chkDefl").checked;
+  };
+  $("chkDefl").onchange = e => { D.state.on = e.target.checked; rerender(); };
+  $("selDeflKey").onchange = e => { D.state.key = e.target.value; rerender(); };
+  $("selDeflBase").onchange = e => { D.state.base = +e.target.value; rerender(); };
+  $("chkEvo").onchange = rerender;
+  addEventListener("resize", () => {
+    const w = $("map").clientWidth;
+    if (w !== lastWidth) render();
+  });
+  window.renderEurostat = render;
+  window.resetEurostatPath = () => { state.path = []; };
   render();
+  lastWidth = $("map").clientWidth;
 })();

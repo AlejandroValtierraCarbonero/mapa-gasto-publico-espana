@@ -1,4 +1,4 @@
-"""Descarga de Eurostat (Contabilidad Nacional, España) y genera js/data.js.
+﻿"""Descarga de Eurostat (Contabilidad Nacional, España) y genera js/data.js.
 
 Datasets: gov_10a_main, gov_10a_exp (COFOG x tipo de gasto) y gov_10a_taxag (impuestos por tipo),
 para S.13 (total AAPP) y sus subsectores S.1311 (Estado), S.1312 (CCAA), S.1313 (entes locales)
@@ -16,7 +16,7 @@ import urllib.request
 from pathlib import Path
 
 BASE = "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/"
-Y0, Y1 = 2015, 2025
+Y0, Y1 = 2000, 2025
 SECTORS = ["S13", "S1311", "S1312", "S1313", "S1314"]
 YEARS = list(range(Y0, Y1 + 1))
 

@@ -67,11 +67,11 @@ def parse_xlsx(raw, year, code):
             vals[idx] = html.unescape(val).strip()
         cell_rows.append(vals)
     header_index = next((i for i, r in enumerate(cell_rows)
-                         if "reas y Pol" in r.get(0, "")
+                         if ("reas y Pol" in r.get(0, "") or r.get(0, "").startswith("Grupos de funci"))
                          and r.get(10, "").strip().lower().startswith("total")), None)
     if header_index is None:
         # Algunas exportaciones pueden eliminar tildes o espacios en la etiqueta.
-        header_index = next((i for i, r in enumerate(cell_rows) if "reas y Pol" in r.get(0, "") and r.get(10, "").strip().lower().startswith("total")), None)
+        header_index = next((i for i, r in enumerate(cell_rows) if ("reas y Pol" in r.get(0, "") or r.get(0, "").startswith("Grupos de funci")) and r.get(10, "").strip().lower().startswith("total")), None)
     if header_index is None:
         raise ValueError(f"{year}/{code}: no se encontró la tabla funcional oficial")
     headers = cell_rows[header_index]
@@ -134,10 +134,21 @@ def download(year, code):
     hidden = dict(re.findall(r'<input type="hidden" name="([^"]+)"[^>]*value="([^"]*)"', page, re.I))
     if not all(k in hidden for k in ("__VIEWSTATE", "__VIEWSTATEGENERATOR", "__EVENTVALIDATION")):
         raise RuntimeError("No se encontraron los tokens de sesión del formulario oficial")
+    if year != 2024:  # el portal parte del último ejercicio: hay que actualizar las consultas del ejercicio elegido
+        refresh = dict(hidden)
+        refresh.update({"ctl00$MainContent$ano": str(year), "ctl00$MainContent$autonomia": code,
+            "ctl00$MainContent$botonTipoConsulta.x": "0", "ctl00$MainContent$botonTipoConsulta.y": "0"})
+        page = opener.open(urllib.request.Request(BASE + "SelDescargaDC.aspx", data=urllib.parse.urlencode(refresh).encode(),
+            headers={"Content-Type": "application/x-www-form-urlencoded", "Referer": BASE + "SelDescargaDC.aspx"}),
+            timeout=60).read().decode("latin-1", "replace")
+        hidden = dict(re.findall(r'<input type="hidden" name="([^"]+)"[^>]*value="([^"]*)"', page, re.I))
+    query = re.search(r'value="(\.\./aspx/DescargaFuncionalCapDC\.aspx\?cdcdad=)"', page)
+    if not query:
+        raise NoDataError(f"{year}/{code}: el portal no ofrece la clasificación funcional por capítulos")
     fields = dict(hidden)
     fields.update({
         "ctl00$MainContent$ano": str(year), "ctl00$MainContent$autonomia": code,
-        "ctl00$MainContent$tipoConsulta": "../aspx/DescargaFuncionalCapDC.aspx?cdcdad=",
+        "ctl00$MainContent$tipoConsulta": query.group(1),
         "ctl00$MainContent$botonAceptar.x": "0", "ctl00$MainContent$botonAceptar.y": "0",
     })
     req = urllib.request.Request(BASE + "SelDescargaDC.aspx", data=urllib.parse.urlencode(fields).encode(),
@@ -170,8 +181,8 @@ def download(year, code):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--years", nargs="+", type=int, default=list(range(2015, 2025)),
-                    help="Ejercicios a consultar (2002–2024; por defecto, 2015–2024)")
+    ap.add_argument("--years", nargs="+", type=int, default=list(range(2002, 2025)),
+                    help="Ejercicios a consultar (2002–2024; por defecto, todos)")
     ap.add_argument("--territories", nargs="+", default=["00", *[f"{i:02d}" for i in range(1, 20)]], help="Códigos oficiales 00–19")
     args = ap.parse_args()
     if any(y not in YEARS for y in args.years) or any(c not in TERRITORIES for c in args.territories):
