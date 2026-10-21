@@ -14,7 +14,7 @@ function loadScripts(files, context = {}) {
 }
 
 function loadDataAndTrees() {
-  const context = loadScripts(["js/data.js", "js/data_deflactores.js", "js/trees.js", "js/deflactor.js"], { window: {} });
+  const context = loadScripts(["js/data.js", "js/data_deflactores.js", "js/data_deflactores_ccaa.js", "js/trees.js", "js/deflactor.js"], { window: {} });
   context.DATA = context.window.DATA;
   context.TREES = context.window.TREES;
   context.SUBSECTORES = context.window.SUBSECTORES;
@@ -157,7 +157,7 @@ test("la página referencia recursos existentes y carga los scripts en orden", (
   }
   assert.deepEqual(
     resources.filter(resource => resource.startsWith("js/")),
-    ["js/data.js", "js/data_deflactores.js", "js/trees.js", "js/deflactor.js", "js/treemap.js", "js/ui.js", "js/evolucion.js", "js/app.js", "js/data_hacienda.js", "js/hacienda.js"]
+    ["js/data.js", "js/data_deflactores.js", "js/data_deflactores_ccaa.js", "js/trees.js", "js/deflactor.js", "js/treemap.js", "js/ui.js", "js/evolucion.js", "js/app.js", "js/data_hacienda.js", "js/hacienda.js"]
   );
 });
 
@@ -530,6 +530,64 @@ test("deflactar mantiene los datos nominales y el total coherente con sus partid
   assert.match(get("sum").innerHTML, /2015–2024 \(acumulado\)/);
   assert.ok(get("dataAlt").find(node => node.tag === "tr").length > 1);
   assert.ok(context.Deflactor.state.on);
+});
+
+test("los deflactores regionales cubren las 19 comunidades y el PIB nacional del INE reproduce el de Eurostat", () => {
+  const { window: w } = loadScripts(["js/data_deflactores.js", "js/data_deflactores_ccaa.js"], { window: {} });
+  const R = w.DEFLACTORES_CCAA;
+  const codes = Array.from({ length: 19 }, (_, i) => String(i + 1).padStart(2, "0"));
+  for (const key of ["ipc", "pib"]) {
+    assert.deepEqual(Object.keys(R[key]).sort(), codes);
+    for (const code of codes) {
+      assert.equal(R[key][code]["2015"], 100);
+      for (let y = 2002; y <= 2024; y++) assert.ok(R[key][code][y] > 0, `${key} ${code} ${y}`);
+    }
+  }
+  for (const y of Object.keys(R.nacionalINE.pib)) {
+    if (w.DEFLACTORES_DATA.pib[y]) assert.ok(Math.abs(R.nacionalINE.pib[y] / w.DEFLACTORES_DATA.pib[y] - 1) < 1e-3, `PIB ${y}`);
+  }
+});
+
+test("el ámbito regional solo sustituye IPC y PIB en la comunidad activa y por defecto se usa España", () => {
+  const { Deflactor: D, window: w } = loadDataAndTrees();
+  const R = w.DEFLACTORES_CCAA;
+  D.state.on = true; D.state.base = 2020;
+  const nationalPib = D.index("pib", 2010);
+  D.state.territory = "01";
+  assert.equal(D.index("pib", 2010), nationalPib);
+  assert.equal(D.regionalAvailable(), true);
+  D.state.scope = "regional";
+  assert.equal(D.index("pib", 2010), R.pib["01"]["2010"]);
+  assert.equal(D.index("ipc", 2010), R.ipc["01"]["2010"]);
+  assert.equal(D.index("consumo", 2010), w.DEFLACTORES_DATA.consumo["2010"]);
+  assert.ok(Math.abs(D.factor("pib", 2010) - R.pib["01"]["2020"] / R.pib["01"]["2010"]) < 1e-12);
+  assert.match(D.label("pib"), /de la comunidad/);
+  assert.match(D.describe(["pib", "consumo"]), /sin serie regional/);
+  assert.ok(Math.min(...D.years()) >= 2002);
+  D.state.territory = "00";
+  assert.equal(D.index("pib", 2010), nationalPib);
+  assert.equal(D.regionalAvailable(), false);
+  D.state.territory = "";
+  assert.equal(D.index("ipc", 2010), w.DEFLACTORES_DATA.ipc["2010"]);
+});
+
+test("en Hacienda el selector de ámbito de precios aparece solo para una comunidad y cambia el resultado", () => {
+  const { get, context } = loadBothSources();
+  const source = get("selSource");
+  source.value = "hacienda"; source.onchange({ target: source });
+  get("chkDefl").checked = true; get("chkDefl").onchange({ target: get("chkDefl") });
+  assert.equal(get("lblDeflScope").hidden, true);
+  const territory = get("selHaciendaTerritory");
+  territory.value = "01"; territory.onchange({ target: territory });
+  assert.equal(get("lblDeflScope").hidden, false);
+  get("selHaciendaYear").value = "2010"; get("selHaciendaYear").onchange({ target: get("selHaciendaYear") });
+  const national = get("sum").innerHTML;
+  get("selDeflScope").value = "regional"; get("selDeflScope").onchange({ target: get("selDeflScope") });
+  assert.notEqual(get("sum").innerHTML, national);
+  assert.match(get("note").textContent, /de la comunidad/);
+  source.value = "eurostat"; source.onchange({ target: source });
+  assert.equal(get("lblDeflScope").hidden, true);
+  assert.equal(context.Deflactor.state.territory, "");
 });
 
 test("la evolución compara el gasto nominal con su deflactor en índice 100", () => {

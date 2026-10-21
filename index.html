@@ -46,6 +46,8 @@
     <label><input type="checkbox" id="chkDefl" aria-describedby="deflHelp"> Deflactar importes (euros constantes)</label>
     <label id="lblDeflKey" hidden>Deflactor <select id="selDeflKey"></select></label>
     <label id="lblDeflBase" hidden>Precios de <select id="selDeflBase"></select></label>
+    <label id="lblDeflScope" hidden>Índices de precios <select id="selDeflScope" aria-describedby="deflScopeHelp"></select></label>
+    <p id="deflScopeHelp" class="hint" hidden>«España» aplica a todas las comunidades los mismos índices nacionales y permite comparar entre ellas. «Comunidad» sustituye solo el IPC y el deflactor del PIB por los de la comunidad (INE, desde 2002); el consumo público, la FBCF y el coste laboral no tienen serie regional y siguen siendo los de España. El IPC regional mide precios de hogares, no el coste de prestar servicios públicos.</p>
     <p id="deflHelp" class="hint">Según la guía metodológica, el modo «Automático» aplica a cada partida su deflactor (IPC en prestaciones, coste laboral en personal, FBCF en inversión, consumo público en servicios y PIB en el resto). Los datos originales no se alteran. Metodología: docs/metodologia/deflactacion.md.</p>
   </fieldset>
   <details class="glossary">
@@ -84,6 +86,7 @@
 <footer id="sourceFooter">Fuente: Eurostat (gov_10a_main, gov_10a_exp y gov_10a_taxag; S.13 Administraciones Públicas y subsectores S.1311 Estado, S.1312 CCAA, S.1313 entes locales y S.1314 Seguridad Social), basada en la Contabilidad Nacional de la IGAE. Millones de euros corrientes, base devengo (<abbr title="Sistema Europeo de Cuentas">SEC</abbr> 2010), consolidado (los subsectores no). Desgloses por función, por tipo e impuestos: 2000–2024; resumen por tipo: 2000–2025. Datos actualizables con <code>python scripts/fetch_data.py</code>.</footer>
 <script src="js/data.js"></script>
 <script src="js/data_deflactores.js"></script>
+<script src="js/data_deflactores_ccaa.js"></script>
 <script src="js/trees.js"></script>
 <script src="js/deflactor.js"></script>
 <script src="js/treemap.js"></script>

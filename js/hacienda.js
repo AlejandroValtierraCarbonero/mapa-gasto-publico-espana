@@ -103,6 +103,7 @@
     return years;
   }
   function render() {
+    Deflactor.state.territory = state.territory;
     lastWidth = $("map").clientWidth;
     const record = H.data[state.territory]?.[String(state.to)];
     if (!record) {
@@ -206,6 +207,7 @@
     $("euControls").hidden = hacienda; $("hcControls").hidden = !hacienda;
     $("note").classList.toggle("method-note", hacienda);
     state.path = [];
+    Deflactor.state.territory = hacienda ? state.territory : "";
     if (window.resetEurostatPath) window.resetEurostatPath();
     if (hacienda) $("sourceFooter").textContent = "Fuente: Ministerio de Hacienda, Liquidaci\u00f3n de presupuestos CCAA. Clasificaci\u00f3n funcional y cap\u00edtulos presupuestarios propios; cifras est\u00e1ticas en miles de euros. El fichero local contiene ejercicios y territorios comprobados en el selector. Liquidaci\u00f3n presupuestaria (obligaciones reconocidas), per\u00edmetro consolidado propio; no comparable directamente con Eurostat (SEC 2010, devengo, S.1312). Actualizaci\u00f3n: python scripts/fetch_hacienda.py.";
     else $("sourceFooter").innerHTML = EUROSTAT_FOOTER;

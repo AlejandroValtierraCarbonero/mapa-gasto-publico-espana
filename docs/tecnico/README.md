@@ -16,5 +16,6 @@ Diseño técnico para aplicar las recomendaciones de [UX](../ux/README.md) y [ac
 | [TEC-010](TEC-010-rendimiento-estados.md) | Rendimiento, carga y estados de error | Parcial | [UX-003](../ux/UX-003-treemap.md), [UX-006](../ux/UX-006-feedback-estados.md), [UX-009](../ux/UX-009-rendimiento.md), [A11Y-005](../accesibilidad/lectores-pantalla-aria.md) |
 | [TEC-011](TEC-011-fases-implementacion.md) | Plan de implementación por fases | Parcial | Todos ([UX](../ux/README.md), [accesibilidad](../accesibilidad/README.md)) |
 | [TEC-012](TEC-012-estrategia-pruebas.md) | Estrategia de pruebas técnicas y accesibles | Parcial | Todos los criterios de aceptación UX y A11Y |
+| [TEC-013](TEC-013-deflactacion-regional.md) | Deflactación por comunidad autónoma (Hacienda) | Implementado | [Metodología de deflactación](../metodologia/deflactacion.md) |
 
 Documento adicional: [Matriz de trazabilidad](trazabilidad.md) (recomendación → TEC).

@@ -72,6 +72,7 @@ Controles en «Opciones de visualización»:
 - **Deflactar importes (euros constantes):** muestra treemap, tabla, resumen y evolución en euros constantes del año base. Los datos originales no se modifican: al desactivarlo se recuperan las cifras nominales.
 - **Deflactor:** Automático (según la partida) o uno fijo (IPC, PIB, consumo público, FBCF, coste laboral).
 - **Precios de:** año base.
+- **Índices de precios** (solo en Hacienda, con una comunidad seleccionada): «España» (predeterminado) o «Comunidad», que sustituye el IPC y el deflactor del PIB por los de la comunidad. Ver §8.
 - **Evolución → «Gasto nominal frente a su deflactor (índice)»:** con la evolución entre años activa, dibuja para cada partida el gasto nominal **sin deflactar** (línea continua) y su deflactor (línea discontinua), ambos con índice 100 en el primer año con dato. La tabla añade una fila de **gasto real** (nominal ÷ deflactor). Si la línea nominal supera a la del deflactor, el gasto real crece.
 
 Se aplica a ambas fuentes (Eurostat y Hacienda). Las notas bajo la barra indican el año base y los deflactores aplicados.
@@ -84,9 +85,25 @@ La guía recomienda completar la deflactación con el gasto como **% del PIB nom
 
 | Fichero | Función |
 |---|---|
+| `scripts/fetch_deflactores_ccaa.py` | Descarga IPC y PIB regionales del INE y genera `js/data_deflactores_ccaa.js` |
+| `js/data_deflactores_ccaa.js` | Índices regionales de IPC y deflactor del PIB (2015 = 100) |
 | `scripts/fetch_deflactores.py` | Descarga las series y genera `js/data_deflactores.js` |
 | `js/data_deflactores.js` | Índices por serie y año (2015 = 100) |
 | `js/deflactor.js` | Clasificación, factores y estado de la deflactación |
 | `js/app.js`, `js/hacienda.js` | Aplicación a cada fuente |
 | `js/evolucion.js` | Modo «Gasto nominal frente a su deflactor» |
 | `tests/project.test.js` | Pruebas de clasificación, factores, coherencia e índice |
+
+## 8. Deflactar con índices de la comunidad autónoma
+
+**Criterio:** el valor predeterminado es el deflactor de **España** para todas las comunidades. Una comunidad solo puede usar índices propios de **IPC** y de **deflactor del PIB** (INE, desde 2002); no existen series regionales oficiales de consumo público, FBCF ni coste laboral público, que siguen siendo las de España.
+
+**Por qué España por defecto:**
+
+- El gasto público no es una cesta de hogares: el IPC regional mide precios de consumo y el deflactor regional del PIB, precios de lo producido en la región (turismo, energía, construcción), no el coste de prestar los servicios públicos.
+- Con un único deflactor, las diferencias de crecimiento real entre comunidades reflejan el gasto y no la inflación regional ni las revisiones de cada serie; la suma de comunidades cuadra con el total.
+- Los salarios públicos dependen en buena parte de decisiones estatales.
+
+**Cuándo ofrece valor la opción regional:** análisis de sensibilidad y comunidades con una inflación muy distinta (Ceuta, Melilla, Baleares). Con datos de 2024 (2015 = 100) los índices regionales se sitúan entre 119,7 y 130,1 (PIB) y entre 120,5 y 125,7 (IPC), frente a 124,0 y 123,5 de España.
+
+**Cálculo del deflactor regional del PIB:** el INE publica el PIB corriente y la tasa de volumen encadenado por comunidad (Contabilidad Regional de España), no el deflactor. Se deriva como D_t = D_(t-1) · (PIB corriente_t / PIB corriente_(t-1)) / (1 + g_t / 100); con España reproduce exactamente el deflactor de Eurostat. Detalle y fuentes en [TEC-013](../tecnico/TEC-013-deflactacion-regional.md).

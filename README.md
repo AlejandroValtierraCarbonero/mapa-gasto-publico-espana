@@ -56,6 +56,7 @@ Los datos se almacenan en `js/data_hacienda.js` en **miles de euros**. El ficher
 | `js/data_hacienda.js` | Datos estáticos de la liquidación de Hacienda |
 | `js/hacienda.js` | Interfaz paralela de consulta territorial Hacienda |
 | `js/data_deflactores.js` | Índices de precios (Eurostat) para deflactar |
+| `js/data_deflactores_ccaa.js` | IPC y deflactor del PIB por comunidad autónoma (INE), opcionales en Hacienda |
 | `js/deflactor.js` | Clasificación de partidas y factores de deflactación |
 | `js/trees.js` | Jerarquías de categorías (ingresos, gastos por tipo, por función y cruces) |
 | `js/treemap.js` | Algoritmo de treemap |
@@ -63,6 +64,7 @@ Los datos se almacenan en `js/data_hacienda.js` en **miles de euros**. El ficher
 | `scripts/fetch_data.py` | Descarga y generación de `data.js` |
 | `scripts/fetch_hacienda.py` | Descarga con sesión oficial y genera `data_hacienda.js` |
 | `scripts/fetch_deflactores.py` | Descarga los deflactores y genera `data_deflactores.js` |
+| `scripts/fetch_deflactores_ccaa.py` | Descarga IPC y PIB regionales (INE) y genera `data_deflactores_ccaa.js` |
 
 ## Uso local
 

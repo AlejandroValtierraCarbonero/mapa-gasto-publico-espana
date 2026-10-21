@@ -28,7 +28,7 @@
       const def = years.map((y, j) => first < 0 || D.index(key, y) == null ? null : D.index(key, y) / D.index(key, years[first]) * 100);
       const real = nom.map((v, j) => v == null || def[j] == null ? null : v / def[j] * 100);
       rows.push({ name: `${s.name} · nominal`, color, dash: false, out: nom, values: nom, group: s.name },
-        { name: `${s.name} · deflactor (${D.KEYS[key]})`, color, dash: true, out: def, values: def, group: s.name },
+        { name: `${s.name} · deflactor (${D.label(key)})`, color, dash: true, out: def, values: def, group: s.name },
         { name: `${s.name} · real (nominal ÷ deflactor)`, color, dash: false, tableOnly: true, out: real, values: real, group: s.name });
     });
     return rows;

@@ -200,16 +200,26 @@
   $("selEvoMode").onchange = rerender;
   const D = Deflactor;
   $("selDeflKey").innerHTML = `<option value="auto">Automático según la partida (guía)</option>` + Object.entries(D.KEYS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
-  $("selDeflBase").innerHTML = D.years().map(y => `<option value="${y}">${y}</option>`).join("");
-  $("selDeflBase").value = D.state.base;
+  const fillBase = () => {
+    const years = D.years();
+    if (!years.includes(D.state.base)) D.state.base = years[years.length - 1];
+    $("selDeflBase").innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
+    $("selDeflBase").value = D.state.base;
+  };
+  fillBase();
+  $("selDeflScope").innerHTML = `<option value="nacional">España (predeterminado)</option><option value="regional">Comunidad (IPC y PIB regionales)</option>`;
   window.syncDeflControls = () => {
     const idx = $("chkEvo").checked && $("selEvoMode").value === "indice";
+    const scope = D.regionalAvailable() && ($("chkDefl").checked || idx);
     $("lblDeflKey").hidden = !($("chkDefl").checked || idx);
     $("lblDeflBase").hidden = !$("chkDefl").checked;
+    $("lblDeflScope").hidden = $("deflScopeHelp").hidden = !scope;
+    fillBase();
   };
   $("chkDefl").onchange = e => { D.state.on = e.target.checked; rerender(); };
   $("selDeflKey").onchange = e => { D.state.key = e.target.value; rerender(); };
   $("selDeflBase").onchange = e => { D.state.base = +e.target.value; rerender(); };
+  $("selDeflScope").onchange = e => { D.state.scope = e.target.value; fillBase(); rerender(); };
   $("chkEvo").onchange = rerender;
   addEventListener("resize", () => {
     const w = $("map").clientWidth;

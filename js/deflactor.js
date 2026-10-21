@@ -8,7 +8,15 @@
     fbcf: "Deflactor de la FBCF (inversión)",
     laboral: "Coste laboral por asalariado público (proxy ICLH)"
   };
-  const state = { on: false, key: "auto", base: 2024 };
+  // Índices por comunidad autónoma (INE) de IPC y PIB; el resto de deflactores solo existe para España.
+  const R = window.DEFLACTORES_CCAA || {};
+  const REGIONAL_KEYS = {
+    ipc: "IPC general de la comunidad (INE)",
+    pib: "Deflactor del PIB de la comunidad (INE, CRE)"
+  };
+  const FIRST_REGIONAL_YEAR = 2002;
+  // scope: «nacional» (predeterminado) o «regional»; territory: código de Hacienda de la comunidad activa («» = ninguna).
+  const state = { on: false, key: "auto", base: 2024, scope: "nacional", territory: "" };
   const norm = s => String(s).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   // Partidas económicas: mandan sobre la función cuando aparecen en la ruta del nodo.
@@ -36,7 +44,10 @@
     return path.some(n => cofog.has(n)) ? "consumo" : "pib";
   }
 
-  const index = (key, year) => (D[key] || {})[year] ?? null;
+  const regionalAvailable = () => !!(state.territory && R.pib?.[state.territory] && R.ipc?.[state.territory]);
+  const isRegional = key => state.scope === "regional" && key in REGIONAL_KEYS && regionalAvailable();
+  const index = (key, year) => ((isRegional(key) ? R[key][state.territory] : D[key]) || {})[year] ?? null;
+  const label = key => isRegional(key) ? REGIONAL_KEYS[key] : KEYS[key];
   const resolve = nodeKey => state.key === "auto" ? nodeKey : state.key;
   // Factor para expresar un importe de `year` en precios del año base; 1 si no se deflacta.
   function factor(nodeKey, year) {
@@ -45,11 +56,15 @@
     return a && b ? a / b : 1;
   }
   const suffix = () => state.on ? ` · € constantes de ${state.base}` : "";
-  const years = () => Object.keys(D.pib || {}).map(Number).sort((a, b) => a - b);
+  // Con ámbito regional solo hay años comunes a IPC y PIB regionales.
+  const years = () => Object.keys(D.pib || {}).map(Number).filter(y => state.scope !== "regional" || !regionalAvailable() || y >= FIRST_REGIONAL_YEAR)
+    .sort((a, b) => a - b);
   const describe = nodeKeys => {
-    const ks = state.key === "auto" ? [...new Set(nodeKeys)] : [state.key];
-    return ks.map(k => KEYS[k]).filter(Boolean).join("; ");
+    const ks = (state.key === "auto" ? [...new Set(nodeKeys)] : [state.key]).filter(k => KEYS[k]);
+    const text = ks.map(label).join("; ");
+    const mixed = ks.some(isRegional) && ks.some(k => !isRegional(k));
+    return text + (mixed ? " (los deflactores sin serie regional son los de España)" : "");
   };
 
-  window.Deflactor = { KEYS, state, classify, index, resolve, factor, suffix, years, describe };
+  window.Deflactor = { KEYS, REGIONAL_KEYS, state, classify, index, resolve, factor, suffix, years, describe, label, regionalAvailable, isRegional };
 })();
